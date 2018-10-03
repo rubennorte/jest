@@ -48,7 +48,12 @@ export async function worker(data: WorkerMessage): Promise<WorkerMetadata> {
   let module;
   let sha1;
 
-  const {computeDependencies, computeSha1, rootDir, filePath} = data;
+  const {
+    computeDependencies,
+    computeSha1,
+    rootDir,
+    filePath,
+  } = data;
 
   const getContent = (): string => {
     if (content === undefined) {

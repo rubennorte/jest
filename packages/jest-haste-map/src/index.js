@@ -13,7 +13,6 @@ import {getSha1, worker} from './worker';
 import crypto from 'crypto';
 import EventEmitter from 'events';
 import fs from 'fs';
-import getMockName from './get_mock_name';
 import getPlatformExtension from './lib/get_platform_extension';
 import H from './constants';
 import HasteFS from './haste_fs';
@@ -459,9 +458,27 @@ class HasteMap extends EventEmitter {
       const metadataId = metadata.id;
       const metadataModule = metadata.module;
 
-      if (metadataId && metadataModule) {
+      if (metadataId) {
         fileMetadata[H.ID] = metadataId;
-        setModule(metadataId, metadataModule);
+
+        if (this._isMockPath(filePath)) {
+          const existingMockPath = mocks.get(metadataId);
+          if (existingMockPath) {
+            this._console.warn(
+              `jest-haste-map: duplicate manual mock found:\n` +
+                `  Module name: ${metadataId}\n` +
+                `  Duplicate Mock path: ${filePath}\nThis warning ` +
+                `is caused by two manual mock files with the same file name.\n` +
+                `Jest will use the mock file found in: \n` +
+                `${filePath}\n` +
+                ` Please delete one of the following two files: \n ` +
+                `${path.join(rootDir, existingMockPath)}\n${filePath}\n\n`,
+            );
+          }
+          mocks.set(metadataId, relativeFilePath);
+        } else if (metadataModule) {
+          setModule(metadataId, metadataModule);
+        }
       }
 
       fileMetadata[H.DEPENDENCIES] = metadata.dependencies || [];
@@ -506,33 +523,14 @@ class HasteMap extends EventEmitter {
       return null;
     }
 
-    if (
-      this._options.mocksPattern &&
-      this._options.mocksPattern.test(filePath)
-    ) {
-      const mockPath = getMockName(filePath);
-      const existingMockPath = mocks.get(mockPath);
-      if (existingMockPath) {
-        this._console.warn(
-          `jest-haste-map: duplicate manual mock found:\n` +
-            `  Module name: ${mockPath}\n` +
-            `  Duplicate Mock path: ${filePath}\nThis warning ` +
-            `is caused by two manual mock files with the same file name.\n` +
-            `Jest will use the mock file found in: \n` +
-            `${filePath}\n` +
-            ` Please delete one of the following two files: \n ` +
-            `${path.join(rootDir, existingMockPath)}\n${filePath}\n\n`,
-        );
-      }
-      mocks.set(mockPath, relativeFilePath);
-    }
-
     if (fileMetadata[H.VISITED]) {
       if (!fileMetadata[H.ID]) {
         return null;
       }
 
-      if (moduleMetadata != null) {
+      if (this._isMockPath(filePath)) {
+        hasteMap.mocks.set(fileMetadata[H.ID], relativeFilePath);
+      } else if (moduleMetadata != null) {
         const platform =
           getPlatformExtension(filePath, this._options.platforms) ||
           H.GENERIC_PLATFORM;
@@ -819,30 +817,30 @@ class HasteMap extends EventEmitter {
           // If it's not an addition, delete the file and all its metadata
           if (fileMetadata != null) {
             const moduleName = fileMetadata[H.ID];
-            const platform =
-              getPlatformExtension(filePath, this._options.platforms) ||
-              H.GENERIC_PLATFORM;
-            hasteMap.files.delete(relativeFilePath);
 
-            let moduleMap = hasteMap.map.get(moduleName);
-            if (moduleMap != null) {
-              // We are forced to copy the object because jest-haste-map exposes
-              // the map as an immutable entity.
-              moduleMap = copy(moduleMap);
-              delete moduleMap[platform];
-              if (Object.keys(moduleMap).length === 0) {
-                hasteMap.map.delete(moduleName);
-              } else {
-                hasteMap.map.set(moduleName, moduleMap);
+            if (this._isMockPath(filePath)) {
+              const mockPath = hasteMap.mocks.get(moduleName);
+              if (mockPath && mockPath === relativeFilePath) {
+                hasteMap.mocks.delete(moduleName);
               }
-            }
+            } else {
+              const platform =
+                getPlatformExtension(filePath, this._options.platforms) ||
+                H.GENERIC_PLATFORM;
+              hasteMap.files.delete(relativeFilePath);
 
-            if (
-              this._options.mocksPattern &&
-              this._options.mocksPattern.test(filePath)
-            ) {
-              const mockName = getMockName(filePath);
-              hasteMap.mocks.delete(mockName);
+              let moduleMap = hasteMap.map.get(moduleName);
+              if (moduleMap != null) {
+                // We are forced to copy the object because jest-haste-map exposes
+                // the map as an immutable entity.
+                moduleMap = copy(moduleMap);
+                delete moduleMap[platform];
+                if (Object.keys(moduleMap).length === 0) {
+                  hasteMap.map.delete(moduleName);
+                } else {
+                  hasteMap.map.set(moduleName, moduleMap);
+                }
+              }
             }
 
             this._recoverDuplicates(hasteMap, relativeFilePath, moduleName);
@@ -994,6 +992,10 @@ class HasteMap extends EventEmitter {
     }
 
     return true;
+  }
+
+  _isMockPath(filePath: Path): boolean {
+    return this._options.mocksPattern.test(filePath);
   }
 
   _createEmptyMap(): InternalHasteMap {

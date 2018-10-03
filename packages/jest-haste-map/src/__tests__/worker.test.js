@@ -17,6 +17,7 @@ import H from '../constants';
 const {worker, getSha1} = require('../worker');
 
 const rootDir = '/project';
+const mocksPattern = '/__mocks__/';
 let mockFs;
 let readFileSync;
 let readFile;
@@ -54,6 +55,11 @@ describe('worker', () => {
         ' * @providesModule Strawberry',
         ' */',
       ].join('\n'),
+      '/project/fruits/__mocks__/strawberry.js': [
+        '/**',
+        ' * @providesModule Strawberry',
+        ' */',
+      ].join('\n'),
       '/project/package.json': [
         '{',
         '  "name": "haste-package",',
@@ -86,11 +92,13 @@ describe('worker', () => {
       await worker({
         computeDependencies: true,
         filePath: '/project/fruits/pear.js',
+        mocksPattern,
         rootDir,
       }),
     ).toEqual({
       dependencies: ['Banana', 'Strawberry'],
       id: 'Pear',
+      isMock: false,
       module: ['fruits/pear.js', H.MODULE],
     });
 
@@ -98,11 +106,13 @@ describe('worker', () => {
       await worker({
         computeDependencies: true,
         filePath: '/project/fruits/strawberry.js',
+        mocksPattern,
         rootDir,
       }),
     ).toEqual({
       dependencies: [],
       id: 'Strawberry',
+      isMock: false,
       module: ['fruits/strawberry.js', H.MODULE],
     });
   });
@@ -112,6 +122,7 @@ describe('worker', () => {
       computeDependencies: true,
       filePath: '/project/fruits/strawberry.js',
       hasteImplModulePath: path.resolve(__dirname, 'haste_impl.js'),
+      mocksPattern,
       rootDir,
     });
 
@@ -125,16 +136,38 @@ describe('worker', () => {
     );
   });
 
+  it('extracts ids from mocks', async () => {
+    const moduleData = await worker({
+      computeDependencies: true,
+      filePath: '/project/fruits/__mocks__/strawberry.js',
+      hasteImplModulePath: path.resolve(__dirname, 'haste_impl.js'),
+      mocksPattern,
+      rootDir,
+    });
+
+    expect(moduleData.id).toBe('strawberry');
+    expect(moduleData).toEqual(
+      expect.objectContaining({
+        dependencies: expect.any(Array),
+        id: expect.any(String),
+        isMock: true,
+        module: undefined,
+      }),
+    );
+  });
+
   it('parses package.json files as haste packages', async () => {
     expect(
       await worker({
         computeDependencies: true,
         filePath: '/project/package.json',
+        mocksPattern,
         rootDir,
       }),
     ).toEqual({
       dependencies: undefined,
       id: 'haste-package',
+      isMock: false,
       module: ['package.json', H.PACKAGE],
     });
   });
@@ -143,7 +176,12 @@ describe('worker', () => {
     let error = null;
 
     try {
-      await worker({computeDependencies: true, filePath: '/kiwi.js', rootDir});
+      await worker({
+        computeDependencies: true,
+        filePath: '/kiwi.js',
+        mocksPattern,
+        rootDir,
+      });
     } catch (err) {
       error = err;
     }
@@ -195,11 +233,13 @@ describe('worker', () => {
         computeDependencies: false,
         filePath: '/project/fruits/pear.js',
         hasteImplModulePath: path.resolve(__dirname, 'haste_impl.js'),
+        mocksPattern,
         rootDir,
       }),
     ).toEqual({
       dependencies: undefined,
       id: 'pear',
+      isMock: false,
       module: ['fruits/pear.js', H.MODULE],
       sha1: undefined,
     });

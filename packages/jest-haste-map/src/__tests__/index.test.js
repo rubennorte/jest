@@ -142,7 +142,10 @@ describe('HasteMap', () => {
 
     mockEmitters = Object.create(null);
     mockFs = object({
-      '/project/fruits/__mocks__/Pear.js': [
+      '/project/fruits/__mocks__/Cherry.js': [
+        '/**',
+        ' * @providesModule Cherry',
+        ' */',
         'const Melon = require("Melon");',
       ].join('\n'),
       '/project/fruits/banana.js': [
@@ -236,14 +239,14 @@ describe('HasteMap', () => {
   it('matches files against a pattern', () =>
     new HasteMap(defaultConfig).build().then(({hasteFS}) => {
       expect(hasteFS.matchFiles(/project\/fruits/)).toEqual([
-        '/project/fruits/__mocks__/Pear.js',
+        '/project/fruits/__mocks__/Cherry.js',
         '/project/fruits/banana.js',
         '/project/fruits/pear.js',
         '/project/fruits/strawberry.js',
       ]);
 
       expect(hasteFS.matchFiles(/__mocks__/)).toEqual([
-        '/project/fruits/__mocks__/Pear.js',
+        '/project/fruits/__mocks__/Cherry.js',
       ]);
     }));
 
@@ -297,7 +300,7 @@ describe('HasteMap', () => {
 
       expect(data.files).toEqual(
         createMap({
-          'fruits/__mocks__/Pear.js': ['', 32, 1, ['Melon'], null],
+          'fruits/__mocks__/Cherry.js': ['Cherry', 32, 1, ['Melon'], null],
           'fruits/banana.js': ['Banana', 32, 1, ['Strawberry'], null],
           // node modules
           'fruits/node_modules/fbjs/lib/flatMap.js': [
@@ -346,7 +349,7 @@ describe('HasteMap', () => {
 
       expect(data.mocks).toEqual(
         createMap({
-          Pear: 'fruits/__mocks__/Pear.js',
+          Cherry: 'fruits/__mocks__/Cherry.js',
         }),
       );
 
@@ -366,7 +369,7 @@ describe('HasteMap', () => {
 
           // The node crawler returns "null" for the SHA-1.
           data.files = createMap({
-            'fruits/__mocks__/Pear.js': ['', 32, 0, ['Melon'], null],
+            'fruits/__mocks__/Cherry.js': ['Cherry', 32, 0, ['Melon'], null],
             'fruits/banana.js': ['Banana', 32, 0, ['Strawberry'], null],
             'fruits/pear.js': ['Pear', 32, 0, ['Banana', 'Strawberry'], null],
             'fruits/strawberry.js': ['Strawberry', 32, 0, [], null],
@@ -388,12 +391,12 @@ describe('HasteMap', () => {
 
         expect(data.files).toEqual(
           createMap({
-            'fruits/__mocks__/Pear.js': [
-              '',
+            'fruits/__mocks__/Cherry.js': [
+              'Cherry',
               32,
               1,
               ['Melon'],
-              'a315b7804be2b124b77c1f107205397f45226964',
+              'a2986517ee843b3265c7dc01215a3445f6d69477',
             ],
             'fruits/banana.js': [
               'Banana',
@@ -494,7 +497,7 @@ describe('HasteMap', () => {
     ].join('\n');
     mockFs['/project/fruits2/__mocks__/subdir/blueberry.js'] = [
       '/**',
-      ' * @providesModule Blueberry2',
+      ' * @providesModule Blueberry1',
       ' */',
     ].join('\n');
 
@@ -504,6 +507,23 @@ describe('HasteMap', () => {
       .build()
       .then(({__hasteMapForTest: data}) => {
         expect(console.warn.mock.calls[0][0]).toMatchSnapshot();
+      });
+  });
+
+  it('does not warn for modules and mocks with the same name', () => {
+    mockFs['/project/fruits/__mocks__/Pear.js'] = [
+      '/**',
+      ' * @providesModule Pear',
+      ' */',
+      'const Melon = require("Melon");',
+    ].join('\n');
+
+    return new HasteMap(
+      Object.assign({mocksPattern: '__mocks__'}, defaultConfig),
+    )
+      .build()
+      .then(({__hasteMapForTest: data}) => {
+        expect(console.warn).not.toHaveBeenCalled();
       });
   });
 
@@ -948,7 +968,7 @@ describe('HasteMap', () => {
             {
               computeDependencies: true,
               computeSha1: false,
-              filePath: '/project/fruits/__mocks__/Pear.js',
+              filePath: '/project/fruits/__mocks__/Cherry.js',
               hasteImplModulePath: undefined,
               rootDir: '/project',
             },
